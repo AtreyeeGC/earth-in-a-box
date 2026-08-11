@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.climate_1d import step_1d_climate
+from src.exoplanet_api import fetch_nasa_exoplanet_data
 from src.exoplanets import EXOPLANET_DATABASE
 from src.grid import create_latitude_grid
 from src.habitability import calculate_habitability_metrics
@@ -27,11 +28,35 @@ dynamic ice-albedo feedbacks, longwave radiative transfer, and meridional heat d
 # --------------------------------------------------
 
 st.sidebar.header("Target Body Selector")
-selected_preset = st.sidebar.selectbox(
-    "Load Planetary Preset", list(EXOPLANET_DATABASE.keys())
-)
-preset_info = EXOPLANET_DATABASE[selected_preset]
-st.sidebar.caption(preset_info["description"])
+
+input_mode = st.sidebar.radio("Selection Mode", ["Preset Catalog", "Search NASA Archive"])
+
+preset_info = EXOPLANET_DATABASE["Modern Earth"]
+selected_name = "Modern Earth"
+
+if input_mode == "Preset Catalog":
+    selected_preset = st.sidebar.selectbox(
+        "Load Planetary Preset", list(EXOPLANET_DATABASE.keys())
+    )
+    preset_info = EXOPLANET_DATABASE[selected_preset]
+    selected_name = selected_preset
+    st.sidebar.caption(preset_info["description"])
+else:
+    search_query = st.sidebar.text_input("Exoplanet Name (e.g. TRAPPIST-1 e, Kepler-22 b)", value="TRAPPIST-1 e")
+    if search_query:
+        with st.sidebar.spinner("Querying NASA Exoplanet Archive..."):
+            api_result = fetch_nasa_exoplanet_data(search_query)
+            if api_result and api_result.get("distance_au"):
+                st.sidebar.success(f"Loaded {api_result['planet_name']} from NASA TAP API")
+                preset_info = {
+                    "distance_au": api_result["distance_au"],
+                    "luminosity_ratio": api_result.get("luminosity_ratio") or 1.0,
+                    "axial_tilt_deg": 0.0,
+                    "forcing_w_m2": 0.0,
+                }
+                selected_name = api_result["planet_name"]
+            else:
+                st.sidebar.warning("Planet not found or missing orbital data. Using defaults.")
 
 st.sidebar.markdown("---")
 st.sidebar.header("Orbital & Planetary Parameters")
@@ -78,7 +103,6 @@ diffusion = st.sidebar.slider(
 
 sim_years = st.sidebar.slider("Simulation Years", min_value=2, max_value=10, value=5)
 
-# Calculate dynamic top-of-atmosphere solar flux
 solar_constant = calculate_solar_constant(luminosity_ratio, distance_au)
 st.sidebar.info(f"Top-of-Atmosphere Solar Flux: **{solar_constant:.1f} W/m²**")
 
@@ -111,7 +135,7 @@ for step in range(1, total_days + 1):
     if step > (sim_years - 1) * 365:
         history.append(list(temps))
 
-temp_matrix = np.array(history).T  # Shape: (latitudes, days)
+temp_matrix = np.array(history).T
 metrics = calculate_habitability_metrics(temp_matrix, area_fractions)
 
 # --------------------------------------------------
@@ -143,7 +167,7 @@ fig = go.Figure(
 )
 
 fig.update_layout(
-    title=f"Seasonal Latitude-Temperature Profile for {selected_preset}",
+    title=f"Seasonal Latitude-Temperature Profile for {selected_name}",
     xaxis_title="Day of Year",
     yaxis_title="Latitude (Degrees)",
     height=550,
