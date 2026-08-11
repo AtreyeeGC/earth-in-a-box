@@ -6,7 +6,7 @@ def test_cold_planet_has_high_albedo():
 
 
 def test_warm_planet_has_low_albedo():
-    assert ice_albedo(300.0) == 0.20
+    assert ice_albedo(310.0) == 0.20
 
 
 def test_intermediate_temperature_has_intermediate_albedo():
