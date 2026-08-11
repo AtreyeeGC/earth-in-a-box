@@ -16,6 +16,7 @@ from src.viz_3d import create_3d_globe_figure
 from src.habitable_zone import calculate_habitable_zone_limits
 from src.gravity import calculate_scale_height, calculate_surface_gravity
 from src.atmosphere import calculate_mean_molecular_weight, calculate_rayleigh_albedo
+from src.experiments import PRESET_SCENARIOS, compute_scenario_deltas, simulate_solar_forcing
 
 
 st.set_page_config(
@@ -139,16 +140,21 @@ experiment_preset = st.sidebar.selectbox(
     ]
 )
 
-# Set defaults based on selection
-if experiment_preset == "Extreme Obliquity (45° Tilt)":
-    axial_tilt = 45.0
-elif experiment_preset == "Double CO₂ (2x Forcing)":
-    co2_ppm = 840.0
-elif experiment_preset == "Faint Young Star (80% Flux)":
-    stellar_luminosity = 0.80
-elif experiment_preset == "Desert World (0% Oceans)":
-    surface_type = "desert_land"  # 100% land heat capacity mask
+# Determine default parameters dynamically before sliders are created
+default_distance = float(preset_info["distance_au"])
+default_luminosity = float(preset_info["luminosity_ratio"])
+default_co2 = 280
+default_tilt = float(preset_info["axial_tilt_deg"])
+default_surface = "earth_like"
 
+if experiment_preset == "Extreme Obliquity (45° Tilt)":
+    default_tilt = 45.0
+elif experiment_preset == "Double CO₂ (2x Forcing)":
+    default_co2 = 560
+elif experiment_preset == "Faint Young Star (80% Flux)":
+    default_luminosity = 0.80
+elif experiment_preset == "Desert World (0% Oceans)":
+    default_surface = "tidally_locked_continent"
 
 
 st.sidebar.markdown("---")
@@ -164,7 +170,7 @@ distance_au = st.sidebar.slider(
     "Orbital Distance (AU)",
     min_value=0.01,
     max_value=3.0,
-    value=float(preset_info["distance_au"]),
+    value=default_distance,
     step=0.01,
 )
 
@@ -172,17 +178,17 @@ luminosity_ratio = st.sidebar.number_input(
     "Stellar Luminosity (L / L_sun)",
     min_value=0.0001,
     max_value=10.0,
-    value=float(preset_info["luminosity_ratio"]),
+    value=default_luminosity,
     format="%.6f",
 )
 
-co2_ppm = st.sidebar.slider("Atmospheric CO₂ (ppm)", min_value=10, max_value=2800, value=280, step=10)
+co2_ppm = st.sidebar.slider("Atmospheric CO₂ (ppm)", min_value=10, max_value=2800, value=default_co2, step=10)
 
 axial_tilt = st.sidebar.slider(
     "Axial Tilt (°)",
     min_value=0.0,
     max_value=90.0,
-    value=float(preset_info["axial_tilt_deg"]),
+    value=default_tilt,
     step=0.5,
 )
 
@@ -198,7 +204,7 @@ eccentricity = st.sidebar.slider(
     "Orbital Eccentricity (e)",
     min_value=0.0,
     max_value=0.6,
-    value=0.0167,  # Earth's eccentricity default
+    value=0.0167,
     step=0.005,
     help="0.0 = Circular Orbit, >0.0 = Elliptical Orbit"
 )
@@ -257,17 +263,15 @@ st.sidebar.info(
 # --------------------------------------------------
 
 if sim_mode == "1D Seasonal Profile":
-    sim_years = st.sidebar.slider("Simulation Years", min_value=2, max_value=10, value=5)
     NUM_BANDS = 18
     latitudes, area_fractions = create_latitude_grid(NUM_BANDS)
 
     temps = [275.0] * NUM_BANDS
-    history = []
 
-    total_days = int(sim_years * 365)
-    for step in range(1, total_days + 1):
+    # Spin-Up Phase: Integrates model to thermal equilibrium before recording
+    SPINUP_YEARS = 15
+    for step in range(1, SPINUP_YEARS * 365 + 1):
         day_of_year = ((step - 1) % 365) + 1
-
         temps = step_1d_climate(
             temperatures=temps,
             latitudes=latitudes,
@@ -280,8 +284,21 @@ if sim_mode == "1D Seasonal Profile":
             dt_days=1.0,
         )
 
-        if step > (sim_years - 1) * 365:
-            history.append(list(temps))
+    # Final Year Evaluation: Records 365 days of equilibrium temperature data
+    history = []
+    for day in range(1, 366):
+        temps = step_1d_climate(
+            temperatures=temps,
+            latitudes=latitudes,
+            area_fractions=area_fractions,
+            day_of_year=day,
+            forcing_w_m2=co2_forcing,
+            axial_tilt_deg=axial_tilt,
+            solar_constant=solar_constant,
+            diffusion_coeff=diffusion,
+            dt_days=1.0,
+        )
+        history.append(list(temps))
 
     temp_matrix = np.array(history).T
     metrics = calculate_habitability_metrics(temp_matrix, area_fractions)
@@ -327,7 +344,11 @@ if sim_mode == "1D Seasonal Profile":
 
 else:
     # 2D Spherical Surface Map Integration
-    surface_type = st.sidebar.selectbox("Surface Mask", ["aqua", "tidally_locked_continent", "earth_like"])
+    surface_type = st.sidebar.selectbox(
+        "Surface Mask",
+        ["aqua", "tidally_locked_continent", "earth_like"],
+        index=0 if default_surface == "aqua" else (1 if default_surface == "tidally_locked_continent" else 2)
+    )
     
     lats, lons, lat_grid, lon_grid = create_2d_grid(18, 36)
     land_mask = create_land_ocean_mask(lat_grid, lon_grid, mask_type=surface_type)
@@ -336,7 +357,8 @@ else:
     temp_matrix_2d = np.full((18, 36), 288.0)
     
     with st.spinner("⏳ Integrating 2D Spherical Heat Transport Engine..."):
-        for day in range(1, 31):
+        # Integrated over 180 days for thermal equilibrium
+        for day in range(1, 181):
             insolation_2d = calculate_2d_insolation(
                 lat_grid_deg=lat_grid,
                 lon_grid_deg=lon_grid,
