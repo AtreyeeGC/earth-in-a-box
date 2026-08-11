@@ -3,11 +3,15 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.climate_1d import step_1d_climate
+from src.climate_2d import step_2d_climate
 from src.exoplanet_api import fetch_nasa_exoplanet_data
 from src.exoplanets import EXOPLANET_DATABASE
+from src.greenhouse_dynamic import calculate_co2_forcing
 from src.grid import create_latitude_grid
+from src.grid_2d import create_2d_grid, create_land_ocean_mask, get_heat_capacity_matrix
 from src.habitability import calculate_habitability_metrics
 from src.solar_geometry import calculate_solar_constant
+from src.solar_geometry_2d import calculate_2d_insolation
 
 st.set_page_config(
     page_title="Earth in a Box — Planetary Climate Simulator",
@@ -15,11 +19,12 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🌍 Earth in a Box: 1D Planetary Climate & Habitability Engine")
+st.title("🌍 Earth in a Box: 2D Planetary Climate & Habitability Engine")
 st.markdown(
     """
 An interactive computational climate simulator modeling seasonal solar insolation, 
-dynamic ice-albedo feedbacks, longwave radiative transfer, and meridional heat diffusion across real and hypothetical planets.
+dynamic ice-albedo feedbacks, Clausius-Clapeyron water vapor greenhouse transport, 
+and 2D spherical meridional heat diffusion across real and hypothetical worlds.
 """
 )
 
@@ -59,7 +64,13 @@ else:
                 st.sidebar.warning("Planet not found or missing orbital data. Using defaults.")
 
 st.sidebar.markdown("---")
-st.sidebar.header("Orbital & Planetary Parameters")
+st.sidebar.header("Model Dimension & Rotation")
+
+sim_mode = st.sidebar.radio("Simulation Dimension", ["1D Seasonal Profile", "2D Spherical Surface Map"])
+tidally_locked = st.sidebar.checkbox("Tidally Locked (Synchronous Rotation)", value=(selected_name == "TRAPPIST-1e"))
+
+st.sidebar.markdown("---")
+st.sidebar.header("Atmosphere & Orbital Parameters")
 
 distance_au = st.sidebar.slider(
     "Orbital Distance (AU)",
@@ -77,6 +88,8 @@ luminosity_ratio = st.sidebar.number_input(
     format="%.6f",
 )
 
+co2_ppm = st.sidebar.slider("Atmospheric CO₂ (ppm)", min_value=10, max_value=2800, value=280, step=10)
+
 axial_tilt = st.sidebar.slider(
     "Axial Tilt (°)",
     min_value=0.0,
@@ -85,92 +98,137 @@ axial_tilt = st.sidebar.slider(
     step=0.5,
 )
 
-forcing = st.sidebar.slider(
-    "Radiative Forcing (W/m²)",
-    min_value=-20.0,
-    max_value=30.0,
-    value=float(preset_info["forcing_w_m2"]),
-    step=0.5,
-)
-
 diffusion = st.sidebar.slider(
     "Heat Diffusion Coeff D (W/m²K)",
     min_value=0.0,
     max_value=10.0,
-    value=3.8,
-    step=0.2,
+    value=0.5 if sim_mode == "2D Spherical Surface Map" else 3.8,
+    step=0.1,
 )
-
-sim_years = st.sidebar.slider("Simulation Years", min_value=2, max_value=10, value=5)
 
 solar_constant = calculate_solar_constant(luminosity_ratio, distance_au)
-st.sidebar.info(f"Top-of-Atmosphere Solar Flux: **{solar_constant:.1f} W/m²**")
+co2_forcing = calculate_co2_forcing(co2_ppm)
+st.sidebar.info(f"Top-of-Atmosphere Solar Flux: **{solar_constant:.1f} W/m²**\n\nCO₂ Forcing: **{co2_forcing:+.2f} W/m²**")
 
 # --------------------------------------------------
-# Run Simulation
+# Execution & Visualization Logic
 # --------------------------------------------------
 
-NUM_BANDS = 18
-latitudes, area_fractions = create_latitude_grid(NUM_BANDS)
+if sim_mode == "1D Seasonal Profile":
+    sim_years = st.sidebar.slider("Simulation Years", min_value=2, max_value=10, value=5)
+    NUM_BANDS = 18
+    latitudes, area_fractions = create_latitude_grid(NUM_BANDS)
 
-temps = [275.0] * NUM_BANDS
-history = []
+    temps = [275.0] * NUM_BANDS
+    history = []
 
-total_days = int(sim_years * 365)
-for step in range(1, total_days + 1):
-    day_of_year = ((step - 1) % 365) + 1
+    total_days = int(sim_years * 365)
+    for step in range(1, total_days + 1):
+        day_of_year = ((step - 1) % 365) + 1
 
-    temps = step_1d_climate(
-        temperatures=temps,
-        latitudes=latitudes,
-        area_fractions=area_fractions,
-        day_of_year=day_of_year,
-        forcing_w_m2=forcing,
-        axial_tilt_deg=axial_tilt,
-        solar_constant=solar_constant,
-        diffusion_coeff=diffusion,
-        dt_days=1.0,
+        temps = step_1d_climate(
+            temperatures=temps,
+            latitudes=latitudes,
+            area_fractions=area_fractions,
+            day_of_year=day_of_year,
+            forcing_w_m2=co2_forcing,
+            axial_tilt_deg=axial_tilt,
+            solar_constant=solar_constant,
+            diffusion_coeff=diffusion,
+            dt_days=1.0,
+        )
+
+        if step > (sim_years - 1) * 365:
+            history.append(list(temps))
+
+    temp_matrix = np.array(history).T
+    metrics = calculate_habitability_metrics(temp_matrix, area_fractions)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Permanently Habitable Area", f"{metrics['permanently_habitable_fraction']*100:.1f}%")
+    col2.metric("Seasonally Habitable Area", f"{metrics['seasonally_habitable_fraction']*100:.1f}%")
+    col3.metric("Permanently Frozen Area", f"{metrics['uninhabitable_frozen_fraction']*100:.1f}%")
+    col4.metric("Boiling Uninhabitable Area", f"{metrics['uninhabitable_boiling_fraction']*100:.1f}%")
+
+    st.markdown("---")
+
+    fig = go.Figure(
+        data=go.Contour(
+            z=temp_matrix,
+            x=list(range(1, 366)),
+            y=latitudes,
+            colorscale="RdYlBu_r",
+            colorbar=dict(title="Temperature (K)"),
+            contours=dict(coloring="heatmap", showlabels=True),
+        )
     )
-
-    if step > (sim_years - 1) * 365:
-        history.append(list(temps))
-
-temp_matrix = np.array(history).T
-metrics = calculate_habitability_metrics(temp_matrix, area_fractions)
-
-# --------------------------------------------------
-# Render Dashboard Metrics
-# --------------------------------------------------
-
-col1, col2, col3, col4 = st.columns(4)
-
-col1.metric("Permanently Habitable Area", f"{metrics['permanently_habitable_fraction']*100:.1f}%")
-col2.metric("Seasonally Habitable Area", f"{metrics['seasonally_habitable_fraction']*100:.1f}%")
-col3.metric("Permanently Frozen Area", f"{metrics['uninhabitable_frozen_fraction']*100:.1f}%")
-col4.metric("Boiling Uninhabitable Area", f"{metrics['uninhabitable_boiling_fraction']*100:.1f}%")
-
-st.markdown("---")
-
-# --------------------------------------------------
-# Render Plotly Heatmap
-# --------------------------------------------------
-
-fig = go.Figure(
-    data=go.Contour(
-        z=temp_matrix,
-        x=list(range(1, 366)),
-        y=latitudes,
-        colorscale="RdYlBu_r",
-        colorbar=dict(title="Temperature (K)"),
-        contours=dict(coloring="heatmap", showlabels=True),
+    fig.update_layout(
+        title=f"1D Seasonal Latitude-Temperature Profile for {selected_name}",
+        xaxis_title="Day of Year",
+        yaxis_title="Latitude (Degrees)",
+        height=550,
     )
-)
+    st.plotly_chart(fig, use_container_width=True)
 
-fig.update_layout(
-    title=f"Seasonal Latitude-Temperature Profile for {selected_name}",
-    xaxis_title="Day of Year",
-    yaxis_title="Latitude (Degrees)",
-    height=550,
-)
+else:
+    # 2D Spherical Surface Map Integration
+    surface_type = st.sidebar.selectbox("Surface Mask", ["aqua", "tidally_locked_continent", "earth_like"])
+    
+    lats, lons, lat_grid, lon_grid = create_2d_grid(18, 36)
+    land_mask = create_land_ocean_mask(lat_grid, lon_grid, mask_type=surface_type)
+    c_matrix = get_heat_capacity_matrix(land_mask)
 
-st.plotly_chart(fig, use_container_width=True)
+    temp_matrix_2d = np.full((18, 36), 275.0)
+    
+    with st.spinner("Integrating 2D Spherical Heat Transport Engine..."):
+        # Spin up thermal equilibrium over 100 days
+        for day in range(1, 100):
+            insolation_2d = calculate_2d_insolation(
+                lat_grid_deg=lat_grid,
+                lon_grid_deg=lon_grid,
+                day_of_year=day,
+                axial_tilt_deg=axial_tilt,
+                solar_constant=solar_constant,
+                tidally_locked=tidally_locked,
+            )
+            temp_matrix_2d = step_2d_climate(
+                temp_matrix=temp_matrix_2d,
+                lat_grid_deg=lat_grid,
+                lon_grid_deg=lon_grid,
+                heat_capacity_matrix=c_matrix,
+                insolation_matrix=insolation_2d,
+                co2_ppm=co2_ppm,
+                forcing_w_m2=0.0,
+                diffusion_coeff=diffusion,
+                dt_seconds=86400.0,
+            )
+
+    mean_temp = float(np.mean(temp_matrix_2d))
+    max_temp = float(np.max(temp_matrix_2d))
+    min_temp = float(np.min(temp_matrix_2d))
+    habitable_pct = float(np.mean((temp_matrix_2d >= 273.15) & (temp_matrix_2d <= 373.15)) * 100)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Mean Global Temp", f"{mean_temp:.1f} K")
+    col2.metric("Max Temperature", f"{max_temp:.1f} K")
+    col3.metric("Min Temperature", f"{min_temp:.1f} K")
+    col4.metric("Habitable Surface Area", f"{habitable_pct:.1f}%")
+
+    st.markdown("---")
+
+    fig_2d = go.Figure(
+        data=go.Heatmap(
+            z=temp_matrix_2d,
+            x=lons,
+            y=lats,
+            colorscale="Plasma",
+            colorbar=dict(title="Temperature (K)"),
+        )
+    )
+    fig_2d.update_layout(
+        title=f"2D Surface Temperature Map for {selected_name} ({'Tidally Locked' if tidally_locked else 'Rotating'})",
+        xaxis_title="Longitude (Degrees)",
+        yaxis_title="Latitude (Degrees)",
+        height=550,
+    )
+    st.plotly_chart(fig_2d, use_container_width=True)
