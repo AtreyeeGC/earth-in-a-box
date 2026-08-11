@@ -21,22 +21,78 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🌍 Earth in a Box: 2D Planetary Climate & Habitability Engine")
+# --------------------------------------------------
+# Custom Glassmorphism & Cyber-Space UI Styling
+# --------------------------------------------------
 st.markdown(
     """
-An interactive computational climate simulator modeling seasonal solar insolation, 
-dynamic ice-albedo feedbacks, Clausius-Clapeyron water vapor greenhouse transport, 
-and 2D spherical meridional heat diffusion across real and hypothetical worlds.
-"""
+    <style>
+    .stApp {
+        background: radial-gradient(circle at 50% 10%, #1e1b4b 0%, #0f172a 60%, #020617 100%);
+        color: #f8fafc;
+    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Sleek Glassmorphism Metric Cards */
+    div[data-testid="stMetric"] {
+        background: rgba(30, 41, 59, 0.65);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        padding: 16px;
+        border-radius: 14px;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        border-color: rgba(56, 189, 248, 0.6);
+    }
+    div[data-testid="stMetric"] label {
+        color: #94a3b8 !important;
+        font-weight: 600;
+        font-size: 0.85rem !important;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        color: #38bdf8 !important;
+        font-weight: 700;
+    }
+    
+    /* Typography */
+    h1, h2, h3 {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        letter-spacing: -0.03em;
+    }
+    
+    /* Custom Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: rgba(2, 6, 23, 0.95);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.title("🌍 Earth in a Box: Planetary Climate & Habitability Engine")
+st.markdown(
+    """
+    <p style='color: #94a3b8; font-size: 1.1rem; margin-top: -10px;'>
+    An interactive computational astrophysics platform modeling stellar insolation, dynamic ice-albedo feedbacks, 
+    Clausius-Clapeyron atmospheric vapor transport, and multidimensional heat diffusion across worlds.
+    </p>
+    """,
+    unsafe_allow_html=True,
 )
 
 # --------------------------------------------------
 # Sidebar Controls & Exoplanet Selector
 # --------------------------------------------------
 
-st.sidebar.header("Target Body Selector")
-
-input_mode = st.sidebar.radio("Selection Mode", ["Preset Catalog", "Search NASA Archive"])
+st.sidebar.markdown("### 🔭 Target Body Selector")
+input_mode = st.sidebar.radio("Selection Mode", ["Preset Catalog", "Search NASA Archive"], label_visibility="collapsed")
 
 preset_info = EXOPLANET_DATABASE["Modern Earth"]
 selected_name = "Modern Earth"
@@ -47,7 +103,7 @@ if input_mode == "Preset Catalog":
     )
     preset_info = EXOPLANET_DATABASE[selected_preset]
     selected_name = selected_preset
-    st.sidebar.caption(preset_info["description"])
+    st.sidebar.caption(f"💡 {preset_info['description']}")
 else:
     search_query = st.sidebar.text_input("Exoplanet Name (e.g. TRAPPIST-1 e, Kepler-22 b)", value="TRAPPIST-1 e")
     if search_query:
@@ -66,13 +122,13 @@ else:
                 st.sidebar.warning("Planet not found or missing orbital data. Using defaults.")
 
 st.sidebar.markdown("---")
-st.sidebar.header("Model Dimension & Rotation")
+st.sidebar.markdown("### 🌐 Model Configuration")
 
-sim_mode = st.sidebar.radio("Simulation Dimension", ["1D Seasonal Profile", "2D Spherical Surface Map"])
+sim_mode = st.sidebar.radio("Simulation Dimension", ["1D Seasonal Profile", "2D Spherical Surface Map"], label_visibility="collapsed")
 tidally_locked = st.sidebar.checkbox("Tidally Locked (Synchronous Rotation)", value=(selected_name == "TRAPPIST-1e"))
 
 st.sidebar.markdown("---")
-st.sidebar.header("Atmosphere & Orbital Parameters")
+st.sidebar.markdown("### ⚙️ Orbital & Atmospheric Parameters")
 
 distance_au = st.sidebar.slider(
     "Orbital Distance (AU)",
@@ -108,18 +164,17 @@ diffusion = st.sidebar.slider(
     step=0.1,
 )
 
-hz_limits = calculate_habitable_zone_limits(luminosity_ratio)
-
-st.sidebar.info(
-    f"Top-of-Atmosphere Solar Flux: **{solar_constant:.1f} W/m²**\n\n"
-    f"CO₂ Forcing: **{co2_forcing:+.2f} W/m²**\n\n"
-    f"🪐 **Habitable Zone (AU):**\n"
-    f"Inner: `{hz_limits['inner_edge_au']} AU` | Outer: `{hz_limits['outer_edge_au']} AU`"
-)
-
+# Compute derived parameters prior to sidebar info display
 solar_constant = calculate_solar_constant(luminosity_ratio, distance_au)
 co2_forcing = calculate_co2_forcing(co2_ppm)
-st.sidebar.info(f"Top-of-Atmosphere Solar Flux: **{solar_constant:.1f} W/m²**\n\nCO₂ Forcing: **{co2_forcing:+.2f} W/m²**")
+hz_limits = calculate_habitable_zone_limits(luminosity_ratio)
+
+st.sidebar.markdown("---")
+st.sidebar.info(
+    f"☀️ **TOA Solar Flux:** `{solar_constant:.1f} W/m²`\n\n"
+    f"☁️ **CO₂ Forcing:** `{co2_forcing:+.2f} W/m²`\n\n"
+    f"🪐 **Habitable Zone:** `{hz_limits['inner_edge_au']} - {hz_limits['outer_edge_au']} AU`"
+)
 
 # --------------------------------------------------
 # Execution & Visualization Logic
@@ -156,12 +211,12 @@ if sim_mode == "1D Seasonal Profile":
     metrics = calculate_habitability_metrics(temp_matrix, area_fractions)
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Permanently Habitable Area", f"{metrics['permanently_habitable_fraction']*100:.1f}%")
-    col2.metric("Seasonally Habitable Area", f"{metrics['seasonally_habitable_fraction']*100:.1f}%")
-    col3.metric("Permanently Frozen Area", f"{metrics['uninhabitable_frozen_fraction']*100:.1f}%")
-    col4.metric("Boiling Uninhabitable Area", f"{metrics['uninhabitable_boiling_fraction']*100:.1f}%")
+    col1.metric("Permanently Habitable", f"{metrics['permanently_habitable_fraction']*100:.1f}%")
+    col2.metric("Seasonally Habitable", f"{metrics['seasonally_habitable_fraction']*100:.1f}%")
+    col3.metric("Permanently Frozen", f"{metrics['uninhabitable_frozen_fraction']*100:.1f}%")
+    col4.metric("Boiling Uninhabitable", f"{metrics['uninhabitable_boiling_fraction']*100:.1f}%")
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
     fig = go.Figure(
         data=go.Contour(
@@ -169,20 +224,23 @@ if sim_mode == "1D Seasonal Profile":
             x=list(range(1, 366)),
             y=latitudes,
             colorscale="RdYlBu_r",
-            colorbar=dict(title="Temperature (K)"),
+            colorbar=dict(title="Temp (K)"),
             contours=dict(coloring="heatmap", showlabels=True),
         )
     )
     fig.update_layout(
-        title=f"1D Seasonal Latitude-Temperature Profile for {selected_name}",
+        title=dict(text=f"1D Seasonal Latitude-Temperature Profile: {selected_name}", font=dict(size=18, color="#f8fafc")),
         xaxis_title="Day of Year",
         yaxis_title="Latitude (Degrees)",
         height=550,
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(fig, use_container_width=True)
 
     # CSV Exporter for 1D Data
-    csv_1d = np.savetxt("temp_1d.csv", temp_matrix, delimiter=",", fmt="%.2f")
+    np.savetxt("temp_1d.csv", temp_matrix, delimiter=",", fmt="%.2f")
     with open("temp_1d.csv", "rb") as f:
         st.download_button(
             label="📥 Export 1D Temperature Matrix (CSV)",
@@ -201,7 +259,7 @@ else:
 
     temp_matrix_2d = np.full((18, 36), 288.0)
     
-    with st.spinner("Integrating 2D Spherical Heat Transport Engine..."):
+    with st.spinner("⏳ Integrating 2D Spherical Heat Transport Engine..."):
         for day in range(1, 31):
             insolation_2d = calculate_2d_insolation(
                 lat_grid_deg=lat_grid,
@@ -233,12 +291,12 @@ else:
     col1.metric("Mean Global Temp", f"{mean_temp:.1f} K")
     col2.metric("Max Temperature", f"{max_temp:.1f} K")
     col3.metric("Min Temperature", f"{min_temp:.1f} K")
-    col4.metric("Habitable Surface Area", f"{habitable_pct:.1f}%")
+    col4.metric("Habitable Surface", f"{habitable_pct:.1f}%")
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # Map projection selector
-    render_style = st.radio("Map Projection", ["2D Surface Map", "3D Interactive Globe"], horizontal=True)
+    render_style = st.radio("Map Projection Style", ["2D Surface Map", "3D Interactive Globe"], horizontal=True, label_visibility="collapsed")
 
     if render_style == "2D Surface Map":
         fig_2d = go.Figure(
@@ -247,14 +305,17 @@ else:
                 x=lons,
                 y=lats,
                 colorscale="Plasma",
-                colorbar=dict(title="Temperature (K)"),
+                colorbar=dict(title="Temp (K)"),
             )
         )
         fig_2d.update_layout(
-            title=f"2D Surface Temperature Map for {selected_name} ({'Tidally Locked' if tidally_locked else 'Rotating'})",
+            title=dict(text=f"2D Surface Temperature Map: {selected_name} ({'Tidally Locked' if tidally_locked else 'Rotating'})", font=dict(size=18, color="#f8fafc")),
             xaxis_title="Longitude (Degrees)",
             yaxis_title="Latitude (Degrees)",
             height=550,
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig_2d, use_container_width=True)
     else:
@@ -262,7 +323,7 @@ else:
             temp_matrix=temp_matrix_2d,
             latitudes=lats,
             longitudes=lons,
-            title=f"3D Surface Temperature Globe for {selected_name}",
+            title=f"3D Surface Temperature Globe: {selected_name}",
         )
         st.plotly_chart(fig_3d, use_container_width=True)
 
