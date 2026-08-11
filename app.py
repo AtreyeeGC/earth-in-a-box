@@ -14,6 +14,8 @@ from src.solar_geometry import calculate_solar_constant
 from src.solar_geometry_2d import calculate_2d_insolation
 from src.viz_3d import create_3d_globe_figure
 from src.habitable_zone import calculate_habitable_zone_limits
+from src.gravity import calculate_scale_height, calculate_surface_gravity
+
 
 st.set_page_config(
     page_title="Earth in a Box — Planetary Climate Simulator",
@@ -164,6 +166,38 @@ diffusion = st.sidebar.slider(
     step=0.1,
 )
 
+eccentricity = st.sidebar.slider(
+    "Orbital Eccentricity (e)",
+    min_value=0.0,
+    max_value=0.6,
+    value=0.0167,  # Earth's eccentricity default
+    step=0.005,
+    help="0.0 = Circular Orbit, >0.0 = Elliptical Orbit"
+)
+
+
+st.sidebar.markdown("### 🪐 Planetary Dimensions")
+
+planet_mass = st.sidebar.slider(
+    "Planetary Mass (M / M_Earth)",
+    min_value=0.1,
+    max_value=10.0,
+    value=1.0,
+    step=0.1,
+)
+
+planet_radius = st.sidebar.slider(
+    "Planetary Radius (R / R_Earth)",
+    min_value=0.3,
+    max_value=3.0,
+    value=1.0,
+    step=0.05,
+)
+
+surface_g = calculate_surface_gravity(planet_mass, planet_radius)
+scale_height_km = calculate_scale_height(288.15, surface_g)
+
+
 # Compute derived parameters prior to sidebar info display
 solar_constant = calculate_solar_constant(luminosity_ratio, distance_au)
 co2_forcing = calculate_co2_forcing(co2_ppm)
@@ -173,6 +207,8 @@ st.sidebar.markdown("---")
 st.sidebar.info(
     f"☀️ **TOA Solar Flux:** `{solar_constant:.1f} W/m²`\n\n"
     f"☁️ **CO₂ Forcing:** `{co2_forcing:+.2f} W/m²`\n\n"
+    f"⚓ **Surface Gravity:** `{surface_g:.2f} g`\n\n"
+    f"📏 **Scale Height:** `{scale_height_km:.1f} km`\n\n"
     f"🪐 **Habitable Zone:** `{hz_limits['inner_edge_au']} - {hz_limits['outer_edge_au']} AU`"
 )
 
