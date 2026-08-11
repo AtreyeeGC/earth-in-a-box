@@ -12,6 +12,7 @@ from src.grid_2d import create_2d_grid, create_land_ocean_mask, get_heat_capacit
 from src.habitability import calculate_habitability_metrics
 from src.solar_geometry import calculate_solar_constant
 from src.solar_geometry_2d import calculate_2d_insolation
+from src.viz_3d import create_3d_globe_figure
 
 st.set_page_config(
     page_title="Earth in a Box — Planetary Climate Simulator",
@@ -170,6 +171,16 @@ if sim_mode == "1D Seasonal Profile":
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    # CSV Exporter for 1D Data
+    csv_1d = np.savetxt("temp_1d.csv", temp_matrix, delimiter=",", fmt="%.2f")
+    with open("temp_1d.csv", "rb") as f:
+        st.download_button(
+            label="📥 Export 1D Temperature Matrix (CSV)",
+            data=f,
+            file_name=f"{selected_name}_1d_temperature.csv",
+            mime="text/csv",
+        )
+
 else:
     # 2D Spherical Surface Map Integration
     surface_type = st.sidebar.selectbox("Surface Mask", ["aqua", "tidally_locked_continent", "earth_like"])
@@ -216,19 +227,41 @@ else:
 
     st.markdown("---")
 
-    fig_2d = go.Figure(
-        data=go.Heatmap(
-            z=temp_matrix_2d,
-            x=lons,
-            y=lats,
-            colorscale="Plasma",
-            colorbar=dict(title="Temperature (K)"),
+    # Map projection selector
+    render_style = st.radio("Map Projection", ["2D Surface Map", "3D Interactive Globe"], horizontal=True)
+
+    if render_style == "2D Surface Map":
+        fig_2d = go.Figure(
+            data=go.Heatmap(
+                z=temp_matrix_2d,
+                x=lons,
+                y=lats,
+                colorscale="Plasma",
+                colorbar=dict(title="Temperature (K)"),
+            )
         )
-    )
-    fig_2d.update_layout(
-        title=f"2D Surface Temperature Map for {selected_name} ({'Tidally Locked' if tidally_locked else 'Rotating'})",
-        xaxis_title="Longitude (Degrees)",
-        yaxis_title="Latitude (Degrees)",
-        height=550,
-    )
-    st.plotly_chart(fig_2d, use_container_width=True)
+        fig_2d.update_layout(
+            title=f"2D Surface Temperature Map for {selected_name} ({'Tidally Locked' if tidally_locked else 'Rotating'})",
+            xaxis_title="Longitude (Degrees)",
+            yaxis_title="Latitude (Degrees)",
+            height=550,
+        )
+        st.plotly_chart(fig_2d, use_container_width=True)
+    else:
+        fig_3d = create_3d_globe_figure(
+            temp_matrix=temp_matrix_2d,
+            latitudes=lats,
+            longitudes=lons,
+            title=f"3D Surface Temperature Globe for {selected_name}",
+        )
+        st.plotly_chart(fig_3d, use_container_width=True)
+
+    # CSV Exporter for 2D Data
+    np.savetxt("temp_2d.csv", temp_matrix_2d, delimiter=",", fmt="%.2f")
+    with open("temp_2d.csv", "rb") as f:
+        st.download_button(
+            label="📥 Export 2D Temperature Grid (CSV)",
+            data=f,
+            file_name=f"{selected_name}_2d_temperature.csv",
+            mime="text/csv",
+        )
