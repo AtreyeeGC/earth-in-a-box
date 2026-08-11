@@ -1,45 +1,22 @@
 def ice_albedo(
     temperature: float,
     cold_temperature: float = 250.0,
-    warm_temperature: float = 305.0,  # Increased from 290.0
+    warm_temperature: float = 273.15,  # Freezing point of water (0 °C)
     cold_albedo: float = 0.60,
     warm_albedo: float = 0.20,
 ) -> float:
     """
-    Calculate planetary albedo from temperature.
+    Calculate surface albedo based on surface temperature.
 
-    Colder planets have more ice and therefore higher albedo.
-    Warmer planets have less ice and therefore lower albedo.
-
-    Parameters
-    ----------
-    temperature : float
-        Planetary temperature in Kelvin.
-
-    cold_temperature : float
-        Temperature below which the planet has maximum albedo.
-
-    warm_temperature : float
-        Temperature above which the planet has minimum albedo.
-
-    cold_albedo : float
-        Albedo of a very cold planet.
-
-    warm_albedo : float
-        Albedo of a warm, mostly ice-free planet.
+    Temperatures above 273.15 K are ice-free (albedo = 0.20).
+    Temperatures below 250.0 K are fully ice-covered (albedo = 0.60).
     """
-
     if temperature <= cold_temperature:
         return cold_albedo
-
-    if temperature >= warm_temperature:
+    elif temperature >= warm_temperature:
         return warm_albedo
-
-    fraction = (
-        (temperature - cold_temperature)
-        / (warm_temperature - cold_temperature)
-    )
-
-    return cold_albedo + fraction * (
-        warm_albedo - cold_albedo
-    )
+    else:
+        fraction = (warm_temperature - temperature) / (
+            warm_temperature - cold_temperature
+        )
+        return warm_albedo + fraction * (cold_albedo - warm_albedo)
