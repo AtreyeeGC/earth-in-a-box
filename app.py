@@ -13,6 +13,7 @@ from src.habitability import calculate_habitability_metrics
 from src.solar_geometry import calculate_solar_constant
 from src.solar_geometry_2d import calculate_2d_insolation
 from src.viz_3d import create_3d_globe_figure
+from src.habitable_zone import calculate_habitable_zone_limits
 
 st.set_page_config(
     page_title="Earth in a Box — Planetary Climate Simulator",
@@ -105,6 +106,15 @@ diffusion = st.sidebar.slider(
     max_value=10.0,
     value=0.5 if sim_mode == "2D Spherical Surface Map" else 3.8,
     step=0.1,
+)
+
+hz_limits = calculate_habitable_zone_limits(luminosity_ratio)
+
+st.sidebar.info(
+    f"Top-of-Atmosphere Solar Flux: **{solar_constant:.1f} W/m²**\n\n"
+    f"CO₂ Forcing: **{co2_forcing:+.2f} W/m²**\n\n"
+    f"🪐 **Habitable Zone (AU):**\n"
+    f"Inner: `{hz_limits['inner_edge_au']} AU` | Outer: `{hz_limits['outer_edge_au']} AU`"
 )
 
 solar_constant = calculate_solar_constant(luminosity_ratio, distance_au)
