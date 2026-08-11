@@ -178,11 +178,10 @@ else:
     land_mask = create_land_ocean_mask(lat_grid, lon_grid, mask_type=surface_type)
     c_matrix = get_heat_capacity_matrix(land_mask)
 
-    temp_matrix_2d = np.full((18, 36), 275.0)
+    temp_matrix_2d = np.full((18, 36), 288.0)
     
     with st.spinner("Integrating 2D Spherical Heat Transport Engine..."):
-        # Spin up thermal equilibrium over 100 days
-        for day in range(1, 100):
+        for day in range(1, 31):
             insolation_2d = calculate_2d_insolation(
                 lat_grid_deg=lat_grid,
                 lon_grid_deg=lon_grid,
@@ -201,6 +200,7 @@ else:
                 forcing_w_m2=0.0,
                 diffusion_coeff=diffusion,
                 dt_seconds=86400.0,
+                max_substep_seconds=900.0,
             )
 
     mean_temp = float(np.mean(temp_matrix_2d))
