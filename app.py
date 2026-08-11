@@ -15,6 +15,7 @@ from src.solar_geometry_2d import calculate_2d_insolation
 from src.viz_3d import create_3d_globe_figure
 from src.habitable_zone import calculate_habitable_zone_limits
 from src.gravity import calculate_scale_height, calculate_surface_gravity
+from src.atmosphere import calculate_mean_molecular_weight, calculate_rayleigh_albedo
 
 
 st.set_page_config(
@@ -197,6 +198,18 @@ planet_radius = st.sidebar.slider(
 surface_g = calculate_surface_gravity(planet_mass, planet_radius)
 scale_height_km = calculate_scale_height(288.15, surface_g)
 
+
+st.sidebar.markdown("### 💨 Atmospheric Structure")
+
+surface_pressure = st.sidebar.slider(
+    "Surface Pressure (bar)",
+    min_value=0.01,
+    max_value=10.0,
+    value=1.0,
+    step=0.05,
+)
+
+rayleigh_albedo = calculate_rayleigh_albedo(surface_pressure)
 
 # Compute derived parameters prior to sidebar info display
 solar_constant = calculate_solar_constant(luminosity_ratio, distance_au)
