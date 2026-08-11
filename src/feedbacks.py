@@ -1,7 +1,7 @@
 def ice_albedo(
     temperature: float,
     cold_temperature: float = 250.0,
-    warm_temperature: float = 290.0,
+    warm_temperature: float = 305.0,  # Increased from 290.0
     cold_albedo: float = 0.60,
     warm_albedo: float = 0.20,
 ) -> float:
