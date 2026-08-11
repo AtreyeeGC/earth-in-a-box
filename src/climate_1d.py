@@ -18,6 +18,7 @@ def step_1d_climate(
     emissivity_eff: float = 0.61,
     forcing_w_m2: float = 0.0,
     axial_tilt_deg: float = 23.44,
+    solar_constant: float = 1361.0,
     diffusion_coeff: float = 3.8,
     dt_days: float = 1.0,
 ) -> List[float]:
@@ -32,9 +33,11 @@ def step_1d_climate(
     new_temperatures = []
 
     for i, (lat, temp) in enumerate(zip(latitudes, temperatures)):
-        # Calculate daily TOA insolation with custom axial tilt
         insolation = daily_insolation(
-            lat, day_of_year, axial_tilt_deg=axial_tilt_deg
+            lat,
+            day_of_year,
+            axial_tilt_deg=axial_tilt_deg,
+            solar_constant=solar_constant,
         )
         albedo = ice_albedo(temp)
         f_in = insolation * (1.0 - albedo) + forcing_w_m2
