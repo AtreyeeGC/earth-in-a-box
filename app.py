@@ -124,6 +124,33 @@ else:
             else:
                 st.sidebar.warning("Planet not found or missing orbital data. Using defaults.")
 
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🧪 Experiment Mode")
+
+experiment_preset = st.sidebar.selectbox(
+    "Load Scientific Scenario",
+    options=[
+        "Custom Parameters",
+        "Extreme Obliquity (45° Tilt)",
+        "Double CO₂ (2x Forcing)",
+        "Faint Young Star (80% Flux)",
+        "Desert World (0% Oceans)"
+    ]
+)
+
+# Set defaults based on selection
+if experiment_preset == "Extreme Obliquity (45° Tilt)":
+    axial_tilt = 45.0
+elif experiment_preset == "Double CO₂ (2x Forcing)":
+    co2_ppm = 840.0
+elif experiment_preset == "Faint Young Star (80% Flux)":
+    stellar_luminosity = 0.80
+elif experiment_preset == "Desert World (0% Oceans)":
+    surface_type = "desert_land"  # 100% land heat capacity mask
+
+
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🌐 Model Configuration")
 
