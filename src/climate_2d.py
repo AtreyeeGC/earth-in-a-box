@@ -1,9 +1,7 @@
 import numpy as np
 
 from src.feedbacks import ice_albedo
-
-STEFAN_BOLTZMANN = 5.670374419e-8
-
+from src.greenhouse_dynamic import calculate_dynamic_olr
 
 def calculate_2d_heat_diffusion(
     temp_matrix: np.ndarray,
@@ -50,19 +48,19 @@ def step_2d_climate(
     lon_grid_deg: np.ndarray,
     heat_capacity_matrix: np.ndarray,
     insolation_matrix: np.ndarray,
-    emissivity_eff: float = 0.61,
+    co2_ppm: float = 280.0,
     forcing_w_m2: float = 0.0,
     diffusion_coeff: float = 0.5,
     dt_seconds: float = 3600.0,
 ) -> np.ndarray:
     """
-    Advance 2D planetary surface temperatures by dt_seconds.
+    Advance 2D planetary surface temperatures by dt_seconds using dynamic atmospheric radiation.
     """
     albedo_func = np.vectorize(ice_albedo)
     albedo_matrix = albedo_func(temp_matrix)
 
     f_in = insolation_matrix * (1.0 - albedo_matrix) + forcing_w_m2
-    f_out = emissivity_eff * STEFAN_BOLTZMANN * (temp_matrix**4)
+    f_out = calculate_dynamic_olr(temp_matrix, co2_ppm=co2_ppm)
     f_diff = calculate_2d_heat_diffusion(
         temp_matrix, lat_grid_deg, diffusion_coeff
     )
